@@ -1,7 +1,7 @@
 const express = require('express'); // 引入 Express 框架
 const axios = require('axios'); // 引入 axios 库用于 HTTP 请求
 const app = express(); // 创建 Express 应用实例
-const port = 3000; // 指定应用监听的端口号
+const port = process.env.PORT || 3000; // 指定应用监听的端口号
 
 app.use(express.json()); // 使用中间件解析请求体为 JSON 格式
 
@@ -51,7 +51,6 @@ app.post('/conversation', async (req, res) => {
 
         let buffer = ''; // 用于拼接数据块
         let chunkCount = 0; // 记录接收到的 chunk 数量
-        // let previousContent = ''; // 记录上一个块的内容
         let previousContent = ''; // 用于存储上一次已发送的内容
         let currentContent = ''; // 用于累积当前消息的内容
 
@@ -83,63 +82,30 @@ app.post('/conversation', async (req, res) => {
 
                         // 只处理从第二个开始的响应块
                         if (chunkCount >= 2) {
-                            // 去除重复的部分
-                            // if (content.startsWith(previousContent)) {
-                            //     content = content.substring(previousContent.length);
-                            // }
-                            // const isEnd = Date.now() - startTime > 10000; // 如果超过 1 分钟没有新的块则视为最后一个块
-
-                            // console.log(`Parsed content (chunk ${chunkCount}):`, content); // 打印处理后的响应内容到控制台
-
-                            // // 将处理后的响应数据通过 SSE 发送到 DUIX 平台
-                            // res.write(`data: ${JSON.stringify({ answer: content, isEnd: isEnd })}\n\n`);
-
-                            // // 更新 previousContent
-                            // previousContent = data.payload.content;
-
-                            // 如果是最后一个块，结束响应
+                            // 检查是否满足发送条件
                             currentContent = data.payload.content.substring(previousContent.length);
-                // 检查是否满足发送条件
-                if (currentContent.length >= 100 && !data.payload.is_final) {
-                    // 查找最近的句号、感叹号或换行符位置
-                    const punctuationMarks = ['。', '！', '\n'];
-                    let lastPunctuationIndex = -1;
-                    for (const mark of punctuationMarks) {
-                        const index = currentContent.lastIndexOf(mark);
-                        if (index > lastPunctuationIndex) {
-                            lastPunctuationIndex = index;
-                        }
-                    }
-                    let sendContent = '';
-                    if (lastPunctuationIndex !== -1) {
-                        // 如果找到符合条件的标点符号，发送其前的内容
-                        sendContent = currentContent.substring(0, lastPunctuationIndex + 1);
-                        // window.$wujie && window.$wujie.bus.$emit('sendAnswer', sendContent);
-                        res.write(`data: ${JSON.stringify({ answer: sendContent, isEnd: data.payload.is_final })}\n\n`);
-                    } else {
-                        // 如果没有找到，发送前30个字符
-                        sendContent = '';
-                    }
-                    // 发送截取后的消息
-                    // window.$wujie && window.$wujie.bus.$emit('sendAnswer', sendContent);
-                    // 更新累积内容，去除已发送的部分
-                    // currentContent = currentContent.substring(sendContent.length);
-                    previousContent += sendContent;
-                } else if (data.payload.is_final) {
-                    // 如果是最终消息，发送剩余内容
-                    // window.$wujie && window.$wujie.bus.$emit('sendAnswer', currentContent);
-                    res.write(`data: ${JSON.stringify({ answer: currentContent, isEnd: data.payload.is_final })}\n\n`);
-                    previousContent = '';
-                    currentContent = '';
-                    // window.$wujie && window.$wujie.bus.$emit('sendAnswer', false);
-                } else {
-                    // 如果是未完成的短消息，累积而不发送
-                    currentContent = '';
-                }
-                            
-                            // if (isEnd) {
-                            //     res.end();
-                            // }
+                            if (currentContent.length >= 100 && !data.payload.is_final) {
+                                const punctuationMarks = ['。', '！', '\n'];
+                                let lastPunctuationIndex = -1;
+                                for (const mark of punctuationMarks) {
+                                    const index = currentContent.lastIndexOf(mark);
+                                    if (index > lastPunctuationIndex) {
+                                        lastPunctuationIndex = index;
+                                    }
+                                }
+                                let sendContent = '';
+                                if (lastPunctuationIndex !== -1) {
+                                    sendContent = currentContent.substring(0, lastPunctuationIndex + 1);
+                                    res.write(`data: ${JSON.stringify({ answer: sendContent, isEnd: data.payload.is_final })}\n\n`);
+                                }
+                                previousContent += sendContent;
+                            } else if (data.payload.is_final) {
+                                res.write(`data: ${JSON.stringify({ answer: currentContent, isEnd: data.payload.is_final })}\n\n`);
+                                previousContent = '';
+                                currentContent = '';
+                            } else {
+                                currentContent = '';
+                            }
                         }
                     }
                 }
